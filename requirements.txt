@@ -1,4 +1,7 @@
+# mac error
 pysqlite3-binary
+# mac 인 경ㅇ
+# pysqlite3
 langchain
 chromadb
 unstructured
@@ -9,3 +12,4 @@ openai
 pypdf
 loguru
 docx2txt
+streamlit

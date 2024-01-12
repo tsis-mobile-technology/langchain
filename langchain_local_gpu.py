@@ -24,12 +24,22 @@ Name the planets in the solar system?
 [/INST] {question}
 """
 
+template = """
+A chat between a curious human ("[[USER_NAME]]") and an artificial intelligence assistant ("[[AI_NAME]]"). The assistant gives helpful, detailed, and polite answers to the human's questions.
+
+[[USER_NAME]]: Hello, [[AI_NAME]].
+[[AI_NAME]]: Hello. How may I help you today?
+[[USER_NAME]]: Please tell me the largest city in Europe.
+[[AI_NAME]]: Sure. The largest city in Europe is Moscow, the capital of Russia.
+[[USER_NAME]]:{question}
+"""
+
 prompt = PromptTemplate(template=template, input_variables=["question"])
 
 # Callbacks support token-wise streaming
 callback_manager = CallbackManager([StreamingStdOutCallbackHandler()])
 
-n_gpu_layers = 120
+n_gpu_layers = 40
 # Change this value based on your model and your GPU VRAM pool.
 n_batch = 512  
 # Should be between 1 and n_ctx, consider the amount of VRAM in your GPU.
@@ -45,7 +55,8 @@ llm = LlamaCpp(
     ctx_size=4096,
     top_k=40,
     top_p=0.9,
-    temp=0.1
+    temp=0.1,
+    n=-1
 	# Verbose is required to pass to the callback manager
 )
 
@@ -54,7 +65,7 @@ llm = LlamaCpp(
 
 llm_chain = LLMChain(prompt=prompt, llm=llm)
 
-question = "What NFL team won the Super Bowl in the year Justin Bieber was born?"
-#question = "조선의 세종대왕은 언제 태어났나?"
+# question = "What NFL team won the Super Bowl in the year Justin Bieber was born?"
+question = "조선의 세종대왕은 언제 태어났나?"
 
 llm_chain.run(question)

@@ -150,7 +150,5 @@ def get_conversation_chain(vetorestore,openai_api_key):
 
     return conversation_chain
 
-
-
 if __name__ == '__main__':
     main()

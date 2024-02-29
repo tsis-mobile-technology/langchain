@@ -1,4 +1,5 @@
 import streamlit as st
+from transformers import pipeline
 import tiktoken
 from loguru import logger
 
@@ -36,8 +37,11 @@ def main():
     if "processComplete" not in st.session_state:
         st.session_state.processComplete = None
 
+    if "uploaded_files_texts" not in st.session_state:
+        st.session_state.uploaded_files_texts = None
+
     with st.sidebar:
-        uploaded_files =  st.file_uploader("Upload your file",type=['pdf','docx'],accept_multiple_files=True)
+        uploaded_files =  st.file_uploader("Upload your file",type=['pdf','docx','pptx','xlsx'],accept_multiple_files=True)
         openai_api_key = st.text_input("OpenAI API Key", key="chatbot_api_key", type="password")
         process = st.button("Process")
     if process:
@@ -47,6 +51,13 @@ def main():
         files_text = get_text(uploaded_files)
         text_chunks = get_text_chunks(files_text)
         vetorestore = get_vectorstore(text_chunks)
+
+        if files_text:
+            st.session_state.uploaded_files_texts = files_text
+        for uploaded_file in uploaded_files:
+            st.button(f"Summarize {uploaded_file.name}").on_click(summarize_document(uploaded_file))
+            
+                    #summarize_document(uploaded_file)
      
         st.session_state.conversation = get_conversation_chain(vetorestore,openai_api_key) 
 
@@ -78,21 +89,38 @@ def main():
                     st.session_state.chat_history = result['chat_history']
                 response = result['answer']
                 source_documents = result['source_documents']
-
                 st.markdown(response)
                 with st.expander("참고 문서 확인"):
                     st.markdown(source_documents[0].metadata['source'], help = source_documents[0].page_content)
                     st.markdown(source_documents[1].metadata['source'], help = source_documents[1].page_content)
                     st.markdown(source_documents[2].metadata['source'], help = source_documents[2].page_content)
-                    
+                   
 
 
 # Add assistant message to chat history
         st.session_state.messages.append({"role": "assistant", "content": response})
 
+# Summary
+def summarize_document(upload_file):
+    summarizer = pipeline("summarization", model="t5-base", tokenizer="t5-base", framework="pt")
+    files_texts = st.session_state.uploaded_files_texts
+    files_text = [file_text for file_text in files_texts if upload_file in file_text.metadata['source']]
+    print(files_text[0].page_content)
+    text = files_text[0].page_content[:1000]
+    summary = summarizer(text, max_length=1000, min_length=30, do_sample=False)
+    if len(summary) > 0:
+        st.markdown(summary[0]['summary_text'])
+
 def tiktoken_len(text):
     tokenizer = tiktoken.get_encoding("cl100k_base")
     tokens = tokenizer.encode(text)
+    return len(tokens)
+
+from transformers import BertTokenizer
+
+def tokenize_korean_text(text):
+    tokenizer = BertTokenizer.from_pretrained('bert-base-multilingual-cased')
+    tokens = tokenizer.tokenize(text)
     return len(tokens)
 
 def get_text(docs):
@@ -125,7 +153,7 @@ def get_text_chunks(text):
     text_splitter = RecursiveCharacterTextSplitter(
         chunk_size=900,
         chunk_overlap=100,
-        length_function=tiktoken_len
+        length_function=tiktoken_len 
     )
     chunks = text_splitter.split_documents(text)
     return chunks
@@ -134,7 +162,7 @@ def get_text_chunks(text):
 def get_vectorstore(text_chunks):
     embeddings = HuggingFaceEmbeddings(
                                         model_name="jhgan/ko-sroberta-multitask",
-                                        model_kwargs={'device': 'cpu'},
+                                        model_kwargs={'device': 'cuda'},  # Change 'cpu' to 'cuda'
                                         encode_kwargs={'normalize_embeddings': True}
                                         )  
     vectordb = FAISS.from_documents(text_chunks, embeddings)
@@ -142,7 +170,7 @@ def get_vectorstore(text_chunks):
 
 def get_conversation_chain(vetorestore,openai_api_key):
     # llm = ChatOpenAI(openai_api_key=openai_api_key, model_name = 'gpt-3.5-turbo',temperature=0)
-    llm = ChatOpenAI(openai_api_key=openai_api_key, model_name = 'gpt-3.5-turbo-1106',temperature=0)
+    llm = ChatOpenAI(openai_api_key=openai_api_key, model_name = 'gpt-3.5-turbo-1106',temperature=0.8, top_p=0.9, max_tokens=1000, frequency_penalty=0.5, presence_penalty=0.5, stop=["\n"])
     conversation_chain = ConversationalRetrievalChain.from_llm(
             llm=llm, 
             chain_type="stuff", 
